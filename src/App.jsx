@@ -6,12 +6,12 @@ const DRIVERS = [
   {
     id: 'driver-1',
     nama: 'Kace',
-    nomorHp: '082115642318',
+    nomorHp: '6282115642318',
   },
   {
     id: 'driver-2',
     nama: 'Agi',
-    nomorHp: '082124527658',
+    nomorHp: '6282124527658',
   },
 ];
 
