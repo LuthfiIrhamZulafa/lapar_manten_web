@@ -15,6 +15,16 @@ const DRIVERS = [
   },
 ];
 
+const APK_DOWNLOAD_URL =
+  'https://github.com/LuthfiIrhamZulafa/lapar_manten_delivery/releases/latest/download/lapar-manten.apk';
+
+const DRIVER_STATUSES = [
+  'Mencari Driver',
+  'Driver ke Resto',
+  'Sedang Diantar',
+  'Selesai',
+];
+
 function formatRupiah(nilai) {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
@@ -32,6 +42,83 @@ function formatTanggal(tanggal) {
   }).format(new Date(tanggal));
 }
 
+function formatTanggalPesan(tanggal) {
+  if (!tanggal) return '-';
+
+  const date = new Date(tanggal);
+
+  const tahun = date.getFullYear();
+  const bulan = String(date.getMonth() + 1).padStart(2, '0');
+  const hari = String(date.getDate()).padStart(2, '0');
+  const jam = String(date.getHours()).padStart(2, '0');
+  const menit = String(date.getMinutes()).padStart(2, '0');
+
+  return `${tahun}-${bulan}-${hari} ${jam}:${menit}`;
+}
+
+function formatTotalPesan(nilai) {
+  return `Rp ${Number(nilai || 0)}`;
+}
+
+function ambilCatatanBersih(item) {
+  const catatan = String(item.catatan || '').trim();
+  const namaMenu = String(item.nama_menu || '').trim();
+
+  if (!catatan) {
+    return '-';
+  }
+
+  const catatanKecil = catatan.toLowerCase();
+  const awalan = `${namaMenu}:`.toLowerCase();
+
+  if (namaMenu && catatanKecil.startsWith(awalan)) {
+    return catatan.substring(catatan.indexOf(':') + 1).trim();
+  }
+
+  return catatan;
+}
+
+function buatPesanDriver(item) {
+  const nomorNota = item.id ?? item.order_id ?? '-';
+  const jumlah = item.jumlah ?? 1;
+  const namaMenu = item.nama_menu || '-';
+  const detailPesanan = item.detail_pesanan || '-';
+  const catatan = ambilCatatanBersih(item);
+
+  const lokasi =
+    item.latitude_tujuan != null &&
+    item.longitude_tujuan != null
+      ? `https://www.google.com/maps/search/?api=1&query=${item.latitude_tujuan},${item.longitude_tujuan}`
+      : '-';
+
+  return [
+    '📢 *ORDERAN LAPAR MANTEN BARU!*',
+    '',
+    `🆔 *Nota:* #${nomorNota}`,
+    `⏰ *Waktu Order:* ${formatTanggalPesan(item.created_at)}`,
+    '',
+    '🍽️ *Rincian Pesanan:*',
+    `• ${namaMenu} (${jumlah} Porsi)`,
+    `Detail: ${detailPesanan}`,
+    '',
+    '📌 *Catatan:*',
+    catatan,
+    '',
+    `💳 *Metode Pembayaran:* ${item.metode_pembayaran || '-'}`,
+    `💰 *Total Bayar:* ${formatTotalPesan(item.total_harga)}`,
+    '',
+    `👤 *Nama Penerima:* ${item.nama_penerima || '-'}`,
+    `📞 *No HP:* ${item.no_hp_penerima || '-'}`,
+    '🏠 *Alamat Lengkap:*',
+    item.alamat_lengkap_manual || '-',
+    '',
+    '📍 *Lokasi Pengantaran:*',
+    lokasi,
+    '',
+    'Silakan konfirmasi ke admin jika orderan ini sudah siap diantar!',
+  ].join('\n');
+}
+
 function LandingPage() {
   return (
     <div className="site-page">
@@ -47,6 +134,7 @@ function LandingPage() {
         <nav>
           <a href="#layanan">Layanan</a>
           <a href="#cara-pesan">Cara Pesan</a>
+          <a href={APK_DOWNLOAD_URL}>Download Aplikasi</a>
           <Link className="admin-link" to="/admin">
             Login Admin
           </Link>
@@ -57,21 +145,23 @@ function LandingPage() {
         <section className="hero">
           <div className="hero-content">
             <span className="eyebrow">Antar makanan wilayah Sumedang</span>
-
             <h1>Makanan favorit datang langsung ke lokasi Anda.</h1>
-
             <p>
               Pesan makanan melalui aplikasi Lapar Manten dan pantau status
               pesanan sampai driver mengantarkan ke tujuan.
             </p>
 
             <div className="hero-buttons">
-              <a className="button primary" href="#cara-pesan">
+              <a className="button primary" href={APK_DOWNLOAD_URL}>
+                Download Aplikasi Android
+              </a>
+
+              <a className="button secondary" href="#cara-pesan">
                 Cara Memesan
               </a>
 
               <Link className="button secondary" to="/admin">
-                Halaman Admin
+                Login Admin
               </Link>
             </div>
           </div>
@@ -296,56 +386,71 @@ function AdminDashboard({ session }) {
   }
 
   async function kirimKeDriver(item) {
-    const orderId = String(item.order_id);
-    const idDriver = driverTerpilih[orderId];
+  const orderId = String(item.order_id);
+  const idDriver = driverTerpilih[orderId];
 
-    if (!idDriver) {
-      alert('Pilih driver terlebih dahulu.');
-      return;
-    }
-
-    const driver = DRIVERS.find((data) => data.id === idDriver);
-
-    if (!driver) return;
-
-    if (driver.nomorHp === '6281234567890') {
-      alert('Nomor driver masih contoh. Ganti nomor driver di App.jsx.');
-      return;
-    }
-
-    const maps =
-      item.latitude_tujuan && item.longitude_tujuan
-        ? `https://www.google.com/maps?q=${item.latitude_tujuan},${item.longitude_tujuan}`
-        : '-';
-
-    const pesan = [
-      `PESANAN LAPAR MANTEN`,
-      ``,
-      `Nomor pesanan: ${item.order_id || '-'}`,
-      `Nama penerima: ${item.nama_penerima || '-'}`,
-      `Nomor HP: ${item.no_hp_penerima || '-'}`,
-      `Alamat: ${item.alamat_lengkap_manual || '-'}`,
-      `Menu: ${item.nama_menu || '-'}`,
-      `Jumlah: ${item.jumlah || '-'}`,
-      `Total: ${formatRupiah(item.total_harga)}`,
-      `Catatan: ${item.catatan || '-'}`,
-      `Lokasi Maps: ${maps}`,
-      ``,
-      `Silakan konfirmasi jika pesanan dapat diantar.`,
-    ].join('\n');
-
-    const berhasil = await updatePesanan(item, {
-      status_driver: `Dikirim ke ${driver.nama}`,
-    });
-
-    if (berhasil) {
-      const urlWhatsApp =
-        `https://wa.me/${driver.nomorHp}` +
-        `?text=${encodeURIComponent(pesan)}`;
-
-      window.open(urlWhatsApp, '_blank');
-    }
+  if (!idDriver) {
+    alert('Pilih driver terlebih dahulu.');
+    return;
   }
+
+  const driver = DRIVERS.find(
+    (data) => data.id === idDriver,
+  );
+
+  if (!driver) {
+    alert('Data driver tidak ditemukan.');
+    return;
+  }
+
+  if (
+    !driver.nomorHp ||
+    driver.nomorHp === '6281234567890'
+  ) {
+    alert(
+      'Nomor driver masih nomor contoh. Ganti nomor driver di App.jsx.',
+    );
+    return;
+  }
+
+  const pesan = buatPesanDriver(item);
+
+  const urlWhatsApp =
+    `https://wa.me/${driver.nomorHp}` +
+    `?text=${encodeURIComponent(pesan)}`;
+
+  // Harus dibuka langsung saat tombol diklik.
+  // Jangan diletakkan setelah await.
+  const tabWhatsApp = window.open(
+    'about:blank',
+    '_blank',
+  );
+
+  if (!tabWhatsApp) {
+    alert(
+      'Browser memblokir WhatsApp. Izinkan pop-up untuk website ini, kemudian coba lagi.',
+    );
+    return;
+  }
+
+  tabWhatsApp.document.title = 'Membuka WhatsApp';
+  tabWhatsApp.document.body.innerHTML =
+    '<p style="font-family:Arial;padding:24px">Membuka WhatsApp driver...</p>';
+
+  const berhasil = await updatePesanan(item, {
+    nama_driver: driver.nama,
+    no_hp_driver: driver.nomorHp,
+    status_driver:
+      item.status_driver || 'Mencari Driver',
+  });
+
+  if (!berhasil) {
+    tabWhatsApp.close();
+    return;
+  }
+
+  tabWhatsApp.location.href = urlWhatsApp;
+}
 
   async function logout() {
     await supabase.auth.signOut();
@@ -498,6 +603,11 @@ function AdminDashboard({ session }) {
                   </p>
 
                   <p>
+                    <span>Driver</span>
+                    <strong>{item.nama_driver || 'Belum dipilih'}</strong>
+                  </p>
+
+                  <p>
                     <span>Status driver</span>
                     <strong>{item.status_driver || 'Mencari Driver'}</strong>
                   </p>
@@ -554,7 +664,6 @@ function AdminDashboard({ session }) {
                     }
                   >
                     <option value="">Pilih salah satu driver</option>
-
                     {DRIVERS.map((driver) => (
                       <option key={driver.id} value={driver.id}>
                         {driver.nama}
@@ -569,6 +678,26 @@ function AdminDashboard({ session }) {
                   >
                     Kirim Pesanan ke WhatsApp Driver
                   </button>
+
+                  <div className="driver-status-section">
+                    <label>Status pengantaran</label>
+
+                    <select
+                      value={item.status_driver || 'Mencari Driver'}
+                      disabled={sedangLoading}
+                      onChange={(event) =>
+                        updatePesanan(item, {
+                          status_driver: event.target.value,
+                        })
+                      }
+                    >
+                      {DRIVER_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </article>
             );
