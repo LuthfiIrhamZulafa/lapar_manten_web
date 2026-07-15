@@ -524,3 +524,83 @@ select:focus {
     flex-direction: column;
   }
 }
+
+.driver-status-section {
+  margin-top: 10px;
+  padding-top: 18px;
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.date-filter {
+  margin: 28px 0 20px;
+  padding: 20px;
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+.date-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.date-button {
+  min-height: 44px;
+  padding: 10px 18px;
+  color: var(--red);
+  background: white;
+  border: 1px solid var(--red);
+  border-radius: 11px;
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.date-button.active {
+  color: white;
+  background: var(--red);
+}
+
+.history-date {
+  min-width: 220px;
+  display: grid;
+  gap: 7px;
+}
+
+.history-date label {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.active-date {
+  margin-left: auto;
+  padding: 11px 14px;
+  color: var(--text-light);
+  background: var(--cream);
+  border-radius: 10px;
+}
+
+.active-date strong {
+  color: var(--red);
+}
+
+@media (max-width: 700px) {
+  .date-filter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .active-date {
+    margin-left: 0;
+  }
+
+  .history-date {
+    width: 100%;
+  }
+}

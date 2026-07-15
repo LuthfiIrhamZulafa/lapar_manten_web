@@ -42,6 +42,46 @@ function formatTanggal(tanggal) {
   }).format(new Date(tanggal));
 }
 
+function tanggalJakarta(value) {
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const parts = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const hasil = {};
+
+  for (const part of parts) {
+    hasil[part.type] = part.value;
+  }
+
+  return `${hasil.year}-${hasil.month}-${hasil.day}`;
+}
+
+function formatTanggalPilihan(tanggal) {
+  if (!tanggal) return '-';
+
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(
+    new Date(`${tanggal}T00:00:00+07:00`),
+  );
+}
+
 function formatTanggalPesan(tanggal) {
   if (!tanggal) return '-';
 
@@ -298,6 +338,34 @@ function AdminDashboard({ session }) {
   const [urutan, setUrutan] = useState('terbaru');
   const [driverTerpilih, setDriverTerpilih] = useState({});
   const [sedangDiproses, setSedangDiproses] = useState('');
+  const [hariIni, setHariIni] = useState(
+  () => tanggalJakarta(new Date()),
+);
+
+const [modeTanggal, setModeTanggal] =
+  useState('hari-ini');
+
+const [tanggalRiwayat, setTanggalRiwayat] =
+  useState(() => tanggalJakarta(new Date()));
+
+  useEffect(() => {
+  const periksaPergantianHari = setInterval(() => {
+    const tanggalSekarang =
+      tanggalJakarta(new Date());
+
+    setHariIni((tanggalSebelumnya) => {
+      if (tanggalSebelumnya !== tanggalSekarang) {
+        return tanggalSekarang;
+      }
+
+      return tanggalSebelumnya;
+    });
+  }, 60000);
+
+  return () => {
+    clearInterval(periksaPergantianHari);
+  };
+}, []);
 
   async function ambilPesanan() {
     const { data, error } = await supabase
@@ -338,32 +406,64 @@ function AdminDashboard({ session }) {
     };
   }, []);
 
-  const pesananTampil = useMemo(() => {
-    const kata = pencarian.trim().toLowerCase();
+  const tanggalAktif =
+  modeTanggal === 'hari-ini'
+    ? hariIni
+    : tanggalRiwayat;
 
-    const hasil = pesanan.filter((item) => {
-      const cocokPencarian =
-        !kata ||
-        String(item.order_id || '').toLowerCase().includes(kata) ||
-        String(item.nama_menu || '').toLowerCase().includes(kata) ||
-        String(item.nama_penerima || '').toLowerCase().includes(kata) ||
-        String(item.no_hp_penerima || '').toLowerCase().includes(kata);
+const pesananPadaTanggal = useMemo(() => {
+  return pesanan.filter((item) => {
+    const tanggalPesanan =
+      tanggalJakarta(item.created_at);
 
-      const cocokStatus =
-        filterStatus === 'Semua' || item.status === filterStatus;
+    return tanggalPesanan === tanggalAktif;
+  });
+}, [pesanan, tanggalAktif]);
 
-      return cocokPencarian && cocokStatus;
-    });
+const pesananTampil = useMemo(() => {
+  const kata = pencarian.trim().toLowerCase();
 
-    return [...hasil].sort((a, b) => {
-      const tanggalA = new Date(a.created_at || 0).getTime();
-      const tanggalB = new Date(b.created_at || 0).getTime();
+  const hasil = pesananPadaTanggal.filter((item) => {
+    const cocokPencarian =
+      !kata ||
+      String(item.order_id || '')
+        .toLowerCase()
+        .includes(kata) ||
+      String(item.nama_menu || '')
+        .toLowerCase()
+        .includes(kata) ||
+      String(item.nama_penerima || '')
+        .toLowerCase()
+        .includes(kata) ||
+      String(item.no_hp_penerima || '')
+        .toLowerCase()
+        .includes(kata);
 
-      return urutan === 'terbaru'
-        ? tanggalB - tanggalA
-        : tanggalA - tanggalB;
-    });
-  }, [pesanan, pencarian, filterStatus, urutan]);
+    const cocokStatus =
+      filterStatus === 'Semua' ||
+      item.status === filterStatus;
+
+    return cocokPencarian && cocokStatus;
+  });
+
+  return [...hasil].sort((a, b) => {
+    const tanggalA =
+      new Date(a.created_at || 0).getTime();
+
+    const tanggalB =
+      new Date(b.created_at || 0).getTime();
+
+    return urutan === 'terbaru'
+      ? tanggalB - tanggalA
+      : tanggalA - tanggalB;
+  });
+}, [
+  pesananPadaTanggal,
+  pencarian,
+  filterStatus,
+  urutan,
+]);
+
 
   async function updatePesanan(item, perubahan) {
     const orderId = item.order_id;
@@ -484,17 +584,72 @@ function AdminDashboard({ session }) {
           </button>
         </div>
 
+        <section className="date-filter">
+  <div className="date-buttons">
+    <button
+      className={
+        modeTanggal === 'hari-ini'
+          ? 'date-button active'
+          : 'date-button'
+      }
+      onClick={() => {
+        setModeTanggal('hari-ini');
+      }}
+    >
+      Pesanan Hari Ini
+    </button>
+
+    <button
+      className={
+        modeTanggal === 'riwayat'
+          ? 'date-button active'
+          : 'date-button'
+      }
+      onClick={() => {
+        setModeTanggal('riwayat');
+      }}
+    >
+      Riwayat Pesanan
+    </button>
+  </div>
+
+  {modeTanggal === 'riwayat' && (
+    <div className="history-date">
+      <label htmlFor="tanggal-riwayat">
+        Pilih tanggal pesanan
+      </label>
+
+      <input
+        id="tanggal-riwayat"
+        type="date"
+        value={tanggalRiwayat}
+        max={hariIni}
+        onChange={(event) => {
+          setTanggalRiwayat(event.target.value);
+        }}
+      />
+    </div>
+  )}
+
+  <div className="active-date">
+    Menampilkan pesanan:{' '}
+    <strong>
+      {formatTanggalPilihan(tanggalAktif)}
+    </strong>
+  </div>
+</section>
+
         <section className="summary-grid">
           <div className="summary-card">
             <span>Total pesanan</span>
-            <strong>{pesanan.length}</strong>
+            <strong>{pesananPadaTanggal.length}</strong>
           </div>
 
           <div className="summary-card">
             <span>Menunggu konfirmasi</span>
             <strong>
               {
-                pesanan.filter(
+                pesananPadaTanggal.filter(
                   (item) => item.status === 'Menunggu Konfirmasi',
                 ).length
               }
@@ -505,7 +660,7 @@ function AdminDashboard({ session }) {
             <span>Sudah dikonfirmasi</span>
             <strong>
               {
-                pesanan.filter(
+                pesananPadaTanggal.filter(
                   (item) => item.status === 'Dikonfirmasi',
                 ).length
               }
@@ -548,7 +703,10 @@ function AdminDashboard({ session }) {
         )}
 
         {!loading && !errorPesanan && pesananTampil.length === 0 && (
-          <div className="empty-state">Belum ada pesanan.</div>
+          <div className="empty-state">
+  Tidak ada pesanan pada{' '}
+  {formatTanggalPilihan(tanggalAktif)}.
+</div>
         )}
 
         <section className="orders-grid">
