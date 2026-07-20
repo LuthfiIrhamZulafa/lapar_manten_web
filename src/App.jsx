@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Route, Routes } from 'react-router-dom';
 import { ADMIN_EMAIL, supabase } from './lib/supabase';
 
@@ -344,6 +344,14 @@ function AdminDashboard({ session }) {
   const [urutan, setUrutan] = useState('terbaru');
   const [driverTerpilih, setDriverTerpilih] = useState({});
   const [sedangDiproses, setSedangDiproses] = useState('');
+  const [pesananBaru, setPesananBaru] = useState(null);
+const audioNotifRef = useRef(null);
+
+const [izinNotifikasi, setIzinNotifikasi] = useState(
+  'Notification' in window
+    ? Notification.permission
+    : 'unsupported',
+);
   const [hariIni, setHariIni] = useState(
   () => tanggalJakarta(new Date()),
 );
@@ -373,6 +381,38 @@ const [tanggalRiwayat, setTanggalRiwayat] =
   };
 }, []);
 
+async function aktifkanNotifikasi() {
+  if (!('Notification' in window)) {
+    alert('Browser ini tidak mendukung notifikasi.');
+    return;
+  }
+
+  const izin = await Notification.requestPermission();
+  setIzinNotifikasi(izin);
+
+  if (izin === 'granted') {
+    alert('Notifikasi pesanan berhasil diaktifkan.');
+
+    // Tes suara sekaligus membuka izin audio browser
+    if (audioNotifRef.current) {
+      try {
+        await audioNotifRef.current.play();
+
+        setTimeout(() => {
+          audioNotifRef.current.pause();
+          audioNotifRef.current.currentTime = 0;
+        }, 1000);
+      } catch (error) {
+        console.log('Suara belum dapat diputar:', error);
+      }
+    }
+  } else if (izin === 'denied') {
+    alert(
+      'Notifikasi ditolak. Aktifkan kembali melalui pengaturan izin website di Chrome.',
+    );
+  }
+}
+
   async function ambilPesanan() {
     const { data, error } = await supabase
       .from('pemesanan')
@@ -390,27 +430,85 @@ const [tanggalRiwayat, setTanggalRiwayat] =
   }
 
   useEffect(() => {
-    ambilPesanan();
+  ambilPesanan();
 
-    const channel = supabase
-      .channel('pemesanan-admin')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'pemesanan',
-        },
-        () => {
-          ambilPesanan();
-        },
-      )
-      .subscribe();
+  const channel = supabase
+    .channel('pemesanan-admin')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'pemesanan',
+      },
+      (payload) => {
+        // Memperbarui daftar untuk INSERT maupun UPDATE
+        ambilPesanan();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
+        // Notifikasi hanya untuk pesanan baru
+        if (payload.eventType !== 'INSERT') {
+          return;
+        }
+
+        const order = payload.new;
+
+        console.log('Pesanan baru masuk:', order);
+
+        // Menampilkan kotak notifikasi pada dashboard
+        setPesananBaru(order);
+
+        // Memutar suara
+        if (audioNotifRef.current) {
+          audioNotifRef.current.currentTime = 0;
+
+          audioNotifRef.current.play().catch((error) => {
+            console.log(
+              'Suara notifikasi diblokir browser:',
+              error,
+            );
+          });
+        }
+
+        // Menampilkan notifikasi Chrome/Windows
+        if (
+          'Notification' in window &&
+          Notification.permission === 'granted'
+        ) {
+          const penerima =
+            order.nama_penerima?.trim() ||
+            'Pelanggan Lapar Manten';
+
+          const menu =
+            order.nama_menu?.trim() ||
+            'Pesanan baru';
+
+          const notification = new Notification(
+            'Pesanan Baru Lapar Manten!',
+            {
+              body:
+                `${penerima} memesan ${menu}. ` +
+                `Total ${formatRupiah(order.total_harga)}`,
+              icon: '/logo-lapar-manten.png',
+              tag: `pesanan-${order.order_id || order.id}`,
+              requireInteraction: true,
+            },
+          );
+
+          notification.onclick = () => {
+            window.focus();
+            notification.close();
+          };
+        }
+      },
+    )
+    .subscribe((status) => {
+      console.log('Status Realtime:', status);
+    });
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
 
   const tanggalAktif =
   modeTanggal === 'hari-ini'
@@ -564,6 +662,36 @@ const pesananTampil = useMemo(() => {
 
   return (
     <div className="admin-page">
+        <audio
+          ref={audioNotifRef}
+          src="/sounds/order-baru.mp3"
+          preload="auto"
+       />
+
+       {pesananBaru && (
+  <div className="notifikasi-pesanan-baru">
+    <div>
+      <strong>Pesanan baru masuk!</strong>
+
+      <p>
+        {pesananBaru.nama_penerima || 'Pelanggan'} memesan{' '}
+        {pesananBaru.nama_menu || 'menu Lapar Manten'}.
+      </p>
+
+      <p>
+        Total: {formatRupiah(pesananBaru.total_harga)}
+      </p>
+    </div>
+
+    <button
+      type="button"
+      onClick={() => setPesananBaru(null)}
+    >
+      Tutup
+    </button>
+  </div>
+)}
+
       <header className="admin-header">
         <div className="brand">
           <img src="/logo-lapar-manten.png" alt="" />
@@ -585,9 +713,26 @@ const pesananTampil = useMemo(() => {
             <h1>Daftar Pesanan</h1>
           </div>
 
-          <button className="button secondary" onClick={ambilPesanan}>
-            Muat Ulang
-          </button>
+          <div className="dashboard-actions">
+  <button
+    className="button primary"
+    type="button"
+    onClick={aktifkanNotifikasi}
+    disabled={izinNotifikasi === 'granted'}
+  >
+    {izinNotifikasi === 'granted'
+      ? '🔔 Notifikasi Aktif'
+      : '🔔 Aktifkan Notifikasi'}
+  </button>
+
+  <button
+    className="button secondary"
+    type="button"
+    onClick={ambilPesanan}
+  >
+    Muat Ulang
+  </button>
+</div>
         </div>
 
         <section className="date-filter">
