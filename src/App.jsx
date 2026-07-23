@@ -22,7 +22,7 @@ const DRIVERS = [
 ];
 
 const APK_DOWNLOAD_URL =
-  'https://github.com/LuthfiIrhamZulafa/lapar-manten-apk/releases/download/v1.0.0/lapar-manten.apk';
+  'https://github.com/LuthfiIrhamZulafa/lapar-manten-apk/releases/latest/download/lapar-manten.apk';
 
 const DRIVER_STATUSES = [
   'Mencari Driver',
