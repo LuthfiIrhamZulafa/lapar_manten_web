@@ -604,3 +604,53 @@ select:focus {
     width: 100%;
   }
 }
+
+.dashboard-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notifikasi-pesanan-baru {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  width: min(360px, calc(100% - 40px));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  border-left: 5px solid #d31124;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #222222;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.2);
+}
+
+.notifikasi-pesanan-baru strong {
+  color: #d31124;
+}
+
+.notifikasi-pesanan-baru p {
+  margin: 5px 0 0;
+}
+
+.notifikasi-pesanan-baru button {
+  border: none;
+  background: transparent;
+  color: #777777;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .dashboard-actions {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .dashboard-actions .button {
+    width: 100%;
+  }
+}
